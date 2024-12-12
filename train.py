@@ -8,12 +8,11 @@ from torch.optim.lr_scheduler import ExponentialLR
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
-from diffusers import AutoencoderKL, UNet2DConditionModel, LMSDiscreteScheduler,  StableDiffusionPipeline
-from diffusers.schedulers import DDPMScheduler, DDIMScheduler
+from diffusers import AutoencoderKL, UNet2DConditionModel
+from diffusers.schedulers import  DDIMScheduler
 
 from src.dataloading import GymDataGenerator, gym_collate_function
 from src.diffusion_model import DiffusionModel
-from src.hf_schedulers import MyDPMSolverMultistepScheduler
 from src.finetuning import modify_unet_for_multi_frame, lora_unet_for_multi_frame
 from src.neural_env import NeuralEnv
 
@@ -21,12 +20,11 @@ from src.neural_env import NeuralEnv
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    # model_id="compvis/stable-diffusion-v1-4"
+    original_env = "LunarLander-v3"
     model_id="stabilityai/stable-diffusion-2-1"
 
     autoencoder = AutoencoderKL.from_pretrained(model_id, subfolder="vae").to(device).requires_grad_(False)
     unet = UNet2DConditionModel.from_pretrained(model_id, subfolder="unet").to(device)
-    # diffusion_scheduler = DDPMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", num_train_timesteps=1000, prediction_type='epsilon')
     diffusion_scheduler = DDIMScheduler.from_pretrained(model_id, subfolder="scheduler")
     
     latent_channels = autoencoder.config.latent_channels
@@ -47,7 +45,7 @@ if __name__ == "__main__":
     # Hyperparameters
     batch_size = 32
     training_steps = 10_000 * batch_size
-    dataset = GymDataGenerator(state_size, "LunarLander-v3", training_steps)
+    dataset = GymDataGenerator(state_size, original_env, training_steps)
     dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=gym_collate_function, num_workers=8)
 
 
@@ -96,7 +94,7 @@ if __name__ == "__main__":
         
         losses.append(loss.item())
         
-        if step % 100 == 0:
+        if step % 100 == 0 and step!=0:
             plt.close()
             plt.title('Training Loss Over Time')
             plt.xlabel('Training Steps')
@@ -107,7 +105,8 @@ if __name__ == "__main__":
             plt.savefig('training_loss.png')
         
             plt.close()
-            unet.save_pretrained('/tmp/checkpoints/LunarLander-v3')
+            unet.save_pretrained(f'/tmp/checkpoints/{original_env}')
+            torch.save(unet.state_dict(), f'/tmp/checkpoints/{original_env}_state_dict.pt')
             history_plot = neural_env.make_history_plot(grid_size=(6,6),num_inference_steps=16)
             plt.imshow(history_plot)
             os.makedirs("./video", exist_ok=True)
@@ -121,7 +120,7 @@ if __name__ == "__main__":
 #%%
 # Save the final plot
 plt.savefig('training_loss.png')
-unet.save_pretrained('/tmp/checkpoints/LunarLander-v2')
+unet.save_pretrained(f'/tmp/checkpoints/{original_env}')
 print("Training complete. Final loss plot saved as 'training_loss.png'.")
 
 # %%
@@ -131,6 +130,6 @@ print("Training complete. Final loss plot saved as 'training_loss.png'.")
 
 
 # to load
-# unet = UNet2DConditionModel.from_pretrained("CompVis/stable-diffusion-v1-4", subfolder="unet").to(device)
-# lora = lora_unet_for_multi_frame(unet, state_size, rank=16)
-# lora.from_pretrained(unet,'/tmp/checkpoints/LunarLander-v2')
+# unet = UNet2DConditionModel.from_pretrained(model_id, subfolder="unet").to(device)
+# lora = lora_unet_for_multi_frame(unet, state_size, rank=128)
+# lora.from_pretrained(unet,'/tmp/checkpoints/{original_env}')
