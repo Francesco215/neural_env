@@ -1,4 +1,5 @@
 #%%
+import cv2
 import os
 import einops
 import torch
@@ -34,13 +35,30 @@ with torch.no_grad():
     # create a temporary variable with our env, which will use rgb_array as render mode. This mode is supported by the RecordVideo-Wrapper
     neural_env = NeuralEnv(diffusion,tmp_env)
 
-    #%% 
-    history_plot = neural_env.make_history_plot(grid_size=(6,6),num_inference_steps=16)
+    # %%
+    neural_env.reset()
+    num_frames = 64
 
-    #%%
-    plt.imshow(history_plot)
-    os.makedirs("./video", exist_ok=True)
-    plt.savefig(f"video/frame_history.png", dpi=300)
-    plt.show()
+    for _ in tqdm(range(num_frames)):
+        action = neural_env.action_space.sample()  
+        neural_env.step(action, 16)
+    frames = neural_env.model.latents_to_frames(neural_env.latent_history)[0]
+    frames = einops.rearrange(frames, 'h (t w) c -> t h w c', w=256).astype('uint8')
 
-# %%
+    # Parameters
+    output_path = 'output_video.mp4'
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  
+
+    # Initialize VideoWriter
+    video_writer = cv2.VideoWriter(output_path, fourcc, fps = 24, frame_size=tuple(frames.shape[1:3]))
+
+    # Write frames to the video
+    for frame in frames:
+        frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        video_writer.write(frame_bgr)
+
+    # Release the writer
+    video_writer.release()
+
+    print(f"Video saved to {output_path}")
+    # %%

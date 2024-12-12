@@ -157,18 +157,10 @@ class DiffusionModel(nn.Module):
         batch_size = latents.shape[0]
         latents = einops.rearrange(latents, 'b t c h w -> (b t) c h w')
         # Apply inverse scaling factor
-
-        # Split the conversion to not overload the GPU RAM
-        split_size = 64
-        for i in range(0, latents.shape[0], split_size):
-            decoded_frames = self.autoencoder.decode(latents[i:i+split_size]).sample().cpu()
-            if i == 0:
-                frames = decoded_frames
-            else:
-                frames = torch.cat((frames, decoded_frames), dim=0)
-
-        frames = einops.rearrange(frames, '(b t) c h w -> b h (t w) c', b=batch_size)
-        frames = torch.clip((frames + 1) * 127.5, 0, 255).detach().numpy().astype(int)
+        latents = latents / self.autoencoder.config.scaling_factor
+        frames = self.autoencoder.decode(latents).sample
+        frames = einops.rearrange(frames, '(b t) c h w -> b h (t w) c', b=batch_size) #TODO this should be changed to (b t c h w)
+        frames = torch.clip((frames + 1) * 127.5, 0, 255).cpu().detach().numpy().astype(int)
         return frames
 
             

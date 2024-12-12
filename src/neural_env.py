@@ -58,7 +58,7 @@ class NeuralEnv(Env):
         for _ in range(15):
             self.parent_env.step(self.parent_env.action_space.sample())
         frames = []
-        for i in range(self.model.state_size-1):
+        for _ in range(self.model.state_size-1):
             action = self.action_space.sample()  # Random action
             _ , reward, terminated, _, _ = self.parent_env.step(action)
 
