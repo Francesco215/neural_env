@@ -1,9 +1,13 @@
 # Gymnasium Env to Neural Env
-This repository reproduces [GameNGen](https://gamengen.github.io/****) and [DIAMOND](https://diamond-wm.github.io/)
+This repository is inspired by [GameNGen](https://gamengen.github.io/****) and [DIAMOND](https://diamond-wm.github.io/) and is designed for researchers and practitioners interested in leveraging diffusion models to simulate dynamic environments.
+
+The main objectives are
+
+- Having as few lines of code as possible (~400 lines in the `src/` folder and ~100 for the `train.py` code)
+- Making it run on consumer hardware and performing experiments in ~1 hour
 
 It creates a Neural [Gymnasium](https://gymnasium.farama.org/index.html) [Environment](https://gymnasium.farama.org/api/env/) where the dynamics are determined by a diffusion-based world model.
 
-The NeuralEnv can be trained arount 1 hour with a single consumer graphics card.
 ### Simplified code
 ```python
 # take a starting gym environment
@@ -22,17 +26,19 @@ diffusion = DiffusionModel(autoencoder, unet, diffusion_scheduler, state_size, o
 neural_env = NeuralEnv(diffusion,original_env)
 ```
 
-The `NeuralEnv` class is a subclass of `gymnasium.Env` and has all its methods, the only difference is that the `.step()`, `.render()`, and other functions are evaluated via the `diffusion` module.
+The `NeuralEnv` class is a subclass of `gymnasium.Env` and inherits all its methods. The key difference is that `.step()`, `.render()`, and other functions are evaluated using the `diffusion` module.
 This assures that the external API of the `NeuralEnv` class is the same at the one of any other `gymnasium.Env` class.
 
-After the diffusion model is trained it can simulate the dynamics of the `gym.Env` it was trained on.
+The `diffusion` model can be trained in ~1h to simulate the dynamics of the `gym.Env` it was trained on.
 
 ## Examples
 Here is an example with 26M parameters LoRa trained in ~30min on a RTX3090. The first 8 frames are given as starting frames, and all of the others are generated 
 
-![frame_history](https://github.com/user-attachments/assets/95353d64-cb50-44b0-b6e4-c56b44610247)
+![frame_history_2800](https://github.com/user-attachments/assets/161aa71e-e48c-4dcd-b97c-5009d7077b78)
 
-There are still some artifacts and it's not perfect, but it demonstrates how leveraging pretrained models like Stable Diffusion allows for efficient adaptation to train world models that simulate dynamic environments. Pretrained models already encode rich representations from extensive training, reducing the computational and data requirements for fine-tuning, and enabling faster convergence to high-quality results.
+There are still some artifacts and it's not perfect, but it demonstrates how leveraging pretrained models like Stable Diffusion allows for efficient adaptation to train world models that simulate dynamic environments.
+
+Pretrained models already encode rich representations from extensive training, reducing the computational and data requirements for fine-tuning, and enabling faster convergence to high-quality results.
 
 ## What's under the hood
 
@@ -43,24 +49,41 @@ The world model is a [LoRa](https://arxiv.org/abs/2106.09685) of [Stable Diffusi
 The first convolutional layer of the diffusion model is expanded to be able to take in multiple frames by frame stacking (image below taken from [the DIAMOND paper](https://arxiv.org/pdf/2405.12399))
 <img width="907" alt="Screenshot 2024-12-13 at 00 24 05" src="https://github.com/user-attachments/assets/8ebdd007-2954-4ac2-ae20-bdf522602fc3" />
 
-## How to use the code
+## Installation
 
-install the requirements
-```bash
-pip install requirements.txt
-```
+## Installation
 
-or using uv
-```bash
-pip install swig #yes, you still need to have swig installed globally
-uv venv
-. .venv/bin/activate
-uv pip install -e .
-```
+To set up the repository, follow these steps:
 
-For training run the `train.py` code
+1. Clone the repository:
+    ```bash
+    git clone https://github.com/Francesco215/neural_env.git
+    cd neural_env
+    ```
+2. Install the required Python dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
+3. Optionally, set up a virtual environment:
+    ```bash
+    pip install uv swig  # you still need to have swig installed globally :(
+    uv venv
+    . .venv/bin/activate
+    uv pip install -e .
+    ```
 
-For generating videos run `video.py`
+## Running the Code
+-  To train the model, run:
+  ```bash
+  python train.py
+  ```
+
+-  To generate videos, run:
+  ```bash
+  python video.py
+  ```
+
+
 
 
 ## Future plans
