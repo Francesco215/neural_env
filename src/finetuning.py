@@ -30,6 +30,12 @@ def modify_unet_for_multi_frame(unet, num_frames):
     unet.conv_in = new_conv
     return unet
 
+def load_conv_in_weights(unet, path):
+    path = f"{path}/conv_in_weights.pth"
+    unet.conv_in.load_state_dict(torch.load(path))
+
+def save_conv_in_weights(unet, path):
+    torch.save(unet.conv_in.state_dict(), f"{path}/conv_in_weights.pth")
 
 def lora_unet_for_multi_frame(unet, state_size, rank):
     # Without LoRa for now

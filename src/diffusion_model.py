@@ -1,13 +1,16 @@
 import torch
 from torch import nn, Tensor
-from .utils import bmult
+from torch.nn import functional as F
 import einops
 
+from .utils import bmult, SparseTransform
+from .hf_models import myUNet2DConditionModel
 
-from diffusers import AutoencoderKL, UNet2DConditionModel, LMSDiscreteScheduler
+from diffusers import AutoencoderKL, LMSDiscreteScheduler
+
 
 class DiffusionModel(nn.Module):
-    def __init__(self, autoencoder:AutoencoderKL, unet:UNet2DConditionModel, scheduler:LMSDiscreteScheduler, state_size, action_space, device="cpu"):
+    def __init__(self, autoencoder:AutoencoderKL, unet:myUNet2DConditionModel, scheduler:LMSDiscreteScheduler, state_size, action_space, device="cpu"):
         super().__init__()
 
         assert autoencoder.config.latent_channels*state_size == unet.config.in_channels, "Autoencoder latent channels must match UNet input channels times state size"
@@ -21,8 +24,7 @@ class DiffusionModel(nn.Module):
         self.action_embedder = nn.Embedding(action_space,unet.config.cross_attention_dim)
 
         self.state_size = state_size
-
-
+        # self.transform_middle_activation = lambda x: x.mean(dim=(-1,-2))
 
     def forward(self, target_latent, context_latents, timesteps, action_emb, noise_aug_emb):
         """
@@ -41,8 +43,11 @@ class DiffusionModel(nn.Module):
         latents = einops.rearrange(latents, 'b t c h w -> b (t c) h w')
         action_emb, noise_aug_emb = action_emb.unsqueeze(1), noise_aug_emb.unsqueeze(1)
         encoder_hidden_states = torch.cat([action_emb, noise_aug_emb], dim=1)
-        noise_pred = self.unet(latents, timesteps, encoder_hidden_states).sample
-        return noise_pred
+        noise_pred, middle_activation = self.unet(latents, timesteps, encoder_hidden_states)
+        return noise_pred, middle_activation
+
+    def loss(self,latent_prediction, target):
+        return F.mse_loss(latent_prediction, target)
 
     @torch.no_grad()
     def noise_target_latent(self, target_latent):
@@ -77,7 +82,6 @@ class DiffusionModel(nn.Module):
 
         return context_latents, noise_aug_emb
 
-
     @torch.no_grad()
     def generate_latent(self, context_latents, action, num_inference_steps=16, guidance=6.5) -> Tensor:
         context_latents = context_latents[:, -self.state_size+1:]
@@ -100,20 +104,18 @@ class DiffusionModel(nn.Module):
         # Sampling loop
         for t in self.scheduler.timesteps:
             model_input = self.scheduler.scale_model_input(latent_image.clone(), timestep=t)
-            noise_pred = self.forward(model_input, context_latents, t, action_emb, noise_aug_emb) 
-            uncond_pred = self.forward(model_input, context_latents, t, uncond_emb_1, uncond_emb_2)
+            noise_pred, middle_activation = self.forward(model_input, context_latents, t, action_emb, noise_aug_emb) 
+            uncond_pred, uncond_middle_activation = self.forward(model_input, context_latents, t, uncond_emb_1, uncond_emb_2)
             # Scheduler step
 
             noise_pred = uncond_pred + guidance * (noise_pred - uncond_pred)
             latent_image = self.scheduler.step(noise_pred, t, latent_image).prev_sample
 
-        return latent_image
+        return latent_image, middle_activation
 
     @property 
     def device(self):
         return next(self.parameters()).device
-
-        
     
     @torch.no_grad()
     def frames_to_latents(self, frames)->Tensor:
@@ -139,8 +141,6 @@ class DiffusionModel(nn.Module):
         latents = latents * self.autoencoder.config.scaling_factor
         latents = einops.rearrange(latents, '(b t) c h w -> b t c h w', b=batch_size)
         return latents
-
-
         
     def latents_to_frames(self,latents):
         """

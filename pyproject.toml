@@ -16,6 +16,5 @@ dependencies = [
     "opencv-python>=4.10.0.84",
     "peft>=0.12.0",
     "scipy>=1.14.1",
-    "swig>=4.2.1",
     "transformers>=4.44.2",
 ]
