@@ -167,3 +167,4 @@ video/
 
 *.egg-info/
 training_loss.png
+loss_noise.png

@@ -57,7 +57,7 @@ if __name__ == "__main__":
     optimizer = optim.AdamW(diffusion.parameters(), lr=learning_rate)
     optimizer_scheduler = ExponentialLR(optimizer, gamma=0.997)
     
-    losses = []
+    losses, timesteps = [], []
     step = 0
     #%%
     plt.figure(figsize=(10, 5))
@@ -78,13 +78,16 @@ if __name__ == "__main__":
             latents = diffusion.frames_to_latents(frames)
             target_latent, context_latents = latents[:, -1], latents[:, :-1]
             context_latents, noise_aug_emb = diffusion.noise_context_latents(context_latents)
-            input_latent, noise, timesteps, target = diffusion.noise_target_latent(target_latent)
+            input_latent, noise, timestep, target = diffusion.noise_target_latent(target_latent)
 
         # make a prediction
-        prediction=diffusion(input_latent, context_latents, timesteps, action_emb, noise_aug_emb)
+        prediction=diffusion(input_latent, context_latents, timestep, action_emb, noise_aug_emb)
 
         # Compute loss
-        loss = nn.functional.mse_loss(prediction, target)
+        loss = nn.functional.mse_loss(prediction, target, reduction='none').mean(dim=(-1,-2,-3))
+        losses += loss.cpu().tolist()
+        timesteps += timestep.cpu().tolist()
+        loss = loss.mean()
         
         # Backpropagation
         optimizer.zero_grad()
@@ -92,7 +95,6 @@ if __name__ == "__main__":
         optimizer.step()
         optimizer_scheduler.step()
         
-        losses.append(loss.item())
         
         if step % 100 == 0 and step!=0:
             plt.close()
@@ -103,6 +105,17 @@ if __name__ == "__main__":
             plt.yscale('log')
             plt.xscale('log')
             plt.savefig('training_loss.png')
+
+            plt.close()
+            plt.title('loss-noise relashionship')
+            plt.xlabel('timesteps')
+            plt.ylabel('loss')
+            history_size = 1000
+            plt.scatter(timesteps[history_size:],losses[history_size:], s=0.5)
+            plt.yscale('log')
+            plt.xscale('log')
+            plt.savefig('loss_noise.png')
+
         
             plt.close()
             unet.save_pretrained(f'/tmp/checkpoints/{original_env}')
