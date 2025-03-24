@@ -271,7 +271,7 @@ traitlets==5.14.3
     #   jupyter-client
     #   jupyter-core
     #   matplotlib-inline
-transformers==4.47.0
+transformers==4.48.0
     # via
     #   world-models (pyproject.toml)
     #   peft
